@@ -1,0 +1,57 @@
+.\" Copyright (C) 2026 Canonical Ltd
+.\" SPDX-License-Identifier: GPL-3.0-only
+.TH ISA-PREFLIGHT 8 "November 2026" "isa-preflight 0.1" "System Administration"
+.SH NAME
+isa-preflight \- verify processor features or chain-load an init program
+.SH DESCRIPTION
+.B isa-preflight
+is a static executable intended to run as the first userspace program in an
+initramfs. On x86-64 variant builds, it checks the CPU flags of every processor
+reported in
+.I /proc/cpuinfo
+and mounts
+.I /proc
+if necessary. If a required flag is missing, it reports the missing features
+and halts the system. If all checks pass, it executes the configured successor
+with its original arguments and environment.
+.PP
+The architecture variant and its required flags are compiled into the
+executable. When built without a variant, the executable skips CPU checking and
+only chain-loads the configured successor. The executable does not contain a
+distribution-specific init path.
+.SH BUILD-TIME CONFIGURATION
+.TP
+.I DEB_HOST_ARCH_VARIANT
+Selects the architecture variant during a package build. An empty value builds
+a generic static no-op chainloader on every architecture. Nonempty variant
+builds currently support x86-64.
+.TP
+.I -Dvariant=VARIANT
+Selects the variant for direct Meson builds.
+.TP
+.I VARIANTTABLE
+Specifies dpkg's variant table during a package build, defaulting to
+.IR /usr/share/dpkg/varianttable .
+The selected row supplies the variant name and comma-separated Linux CPU flags.
+For direct Meson builds, use
+.IR -Dvarianttable=PATH .
+.SH RUNTIME CONFIGURATION
+The configuration directory is
+.IR /etc/isa-preflight .
+.TP
+.I next-init
+A single line containing the absolute path of the executable to run after a
+successful check. The original argument vector and environment are preserved.
+LF and CRLF line endings are accepted.
+.SH EXIT BEHAVIOR
+A successful check does not return: the successor replaces
+.B isa-preflight
+via
+.BR execve (2).
+Configuration errors and unsupported processors cause a diagnostic followed by
+a system halt when running as PID 1. When running with another PID, or if
+halting is unavailable, the program pauses indefinitely.
+.SH NOTES
+The x86-64 variant checker is freestanding and compiled for the base x86-64
+instruction set so that its own instructions do not require the variant being
+checked.

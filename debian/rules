@@ -1,0 +1,37 @@
+#!/usr/bin/make -f
+# Copyright (C) 2026 Canonical Ltd
+# SPDX-License-Identifier: GPL-3.0-only
+
+include /usr/share/dpkg/architecture.mk
+include /usr/share/dpkg/buildtools.mk
+export CC
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+VARIANTTABLE ?= /usr/share/dpkg/varianttable
+
+%:
+	dh $@ --buildsystem=meson
+
+override_dh_auto_configure:
+	dh_auto_configure -- -Dvariant=$(DEB_HOST_ARCH_VARIANT) -Dvarianttable=$(VARIANTTABLE)
+
+override_dh_installdocs:
+	dh_installdocs
+ifeq ($(strip $(DEB_HOST_ARCH_VARIANT)),)
+	set -e; \
+		libc_package=$$(debian/static-library-package libc.a); \
+		libgcc_package=$$(debian/static-library-package libgcc.a); \
+		install -m 0644 "/usr/share/doc/$${libc_package%%:*}/copyright" debian/isa-preflight/usr/share/doc/isa-preflight/glibc-copyright; \
+		install -m 0644 "/usr/share/doc/$${libgcc_package%%:*}/copyright" debian/isa-preflight/usr/share/doc/isa-preflight/libgcc-copyright
+endif
+
+override_dh_gencontrol:
+ifeq ($(strip $(DEB_HOST_ARCH_VARIANT)),)
+	set -e; \
+		libc_package=$$(debian/static-library-package libc.a); \
+		built_using=$$(dpkg-query -W -f='$${source:Package} (= $${source:Version})' "$$libc_package"); \
+		dh_gencontrol -pisa-preflight -- -V"static:Built-Using=$$built_using"
+else
+	dh_gencontrol -pisa-preflight -- -Vstatic:Built-Using=
+endif
+	dh_gencontrol --remaining-packages

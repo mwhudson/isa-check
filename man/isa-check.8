@@ -1,0 +1,71 @@
+.\" Copyright (C) 2026 Canonical Ltd
+.\" SPDX-License-Identifier: GPL-3.0-only
+.TH ISA-CHECK 8 "November 2026" "isa-check 0.1" "System Administration"
+.SH NAME
+isa-check \- list or probe processor architecture variants
+.SH SYNOPSIS
+.B isa-check
+.RI [ --table " PATH" ]
+.RI [ VARIANT ]
+.SH DESCRIPTION
+.B isa-check
+reads dpkg's variant table and checks the CPU flags of every processor reported
+in
+.IR /proc/cpuinfo .
+When invoked without a variant, it prints every compatible variant for the
+current architecture, one per line, in table order from highest to lowest.
+.PP
+When a variant is specified, no output is produced on success. An unsupported
+variant produces a diagnostic listing its missing features.
+.PP
+The proc filesystem must already be mounted at
+.IR /proc .
+.B isa-check
+does not mount it. If cpuinfo cannot be opened or read, the command reports an
+error and exits with status 2.
+.SH OPTIONS
+.TP
+.BI --table " PATH"
+Read the variant table from
+.I PATH
+instead of
+.IR /usr/share/dpkg/varianttable .
+.TP
+.B --help
+Print usage information.
+.SH EXIT STATUS
+.TP
+.B 0
+The requested variant is supported, or at least one compatible variant was
+listed.
+.TP
+.B 1
+The requested variant is unsupported, or no compatible variants were found.
+.TP
+.B 2
+A usage, variant table, or cpuinfo error occurred.
+.SH EXAMPLES
+List compatible variants:
+.PP
+.nf
+.RS
+$ isa-check
+amd64v3
+amd64v2
+amd64v1
+.RE
+.fi
+.PP
+Probe for amd64v3 in an installer script:
+.PP
+.nf
+.RS
+if isa-check amd64v3; then
+    variant=amd64v3
+fi
+.RE
+.fi
+.SH FILES
+.I /usr/share/dpkg/varianttable
+.br
+.I /proc/cpuinfo
