@@ -1,0 +1,23 @@
+#!/usr/bin/make -f
+# Copyright (C) 2026 Canonical Ltd
+# SPDX-License-Identifier: GPL-3.0-only
+
+include /usr/share/dpkg/architecture.mk
+include /usr/share/dpkg/buildtools.mk
+export CC
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+VARIANTTABLE ?= /usr/share/dpkg/varianttable
+
+%:
+	dh $@ --buildsystem=meson
+
+override_dh_auto_configure:
+	dh_auto_configure -- -Dvariant=$(DEB_HOST_ARCH_VARIANT) -Dvarianttable=$(VARIANTTABLE)
+
+override_dh_lintian:
+ifeq ($(strip $(DEB_HOST_ARCH_VARIANT)),)
+	dh_lintian -Nisa-preflight
+else
+	dh_lintian
+endif

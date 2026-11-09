@@ -1,0 +1,10 @@
+*.o
+/build*/
+/obj-*/
+/debian/.debhelper/
+/debian/debhelper-build-stamp
+/debian/files
+/debian/isa-check/
+/debian/isa-preflight/
+/debian/*.debhelper.log
+/debian/*.substvars

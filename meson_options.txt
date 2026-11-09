@@ -1,0 +1,7 @@
+# Copyright (C) 2026 Canonical Ltd
+# SPDX-License-Identifier: GPL-3.0-only
+
+option('variant', type: 'string', value: '',
+       description: 'Architecture variant to embed; empty selects the no-op chainloader')
+option('varianttable', type: 'string', value: '/usr/share/dpkg/varianttable',
+       description: 'Path to dpkg varianttable')

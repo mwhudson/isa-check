@@ -1,0 +1,35 @@
+Source: isa-check
+Section: utils
+Priority: optional
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Build-Depends: mawk | awk, binutils, debhelper-compat (= 13), dpkg (>= 1.22.21ubuntu4),
+ dpkg-dev (>= 1.22.21ubuntu4), meson (>= 0.63), ninja-build
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/mwhudson/isa-check
+Vcs-Git: https://github.com/mwhudson/isa-check.git
+Vcs-Browser: https://github.com/mwhudson/isa-check
+
+Package: isa-check
+Architecture: any
+Depends: dpkg (>= 1.22.21ubuntu4), ${misc:Depends}, ${shlibs:Depends}
+Description: list and probe compatible processor architecture variants
+ isa-check reads dpkg's varianttable and checks every processor on the running
+ system. With no arguments it lists all compatible variants in table order.
+ With a variant argument it reports whether that variant is supported and
+ returns a script-friendly status, including missing CPU features on failure.
+
+Package: isa-preflight
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: verify CPU features or chain-load initramfs userspace
+ isa-preflight is an executable intended to run as /init. When
+ DEB_HOST_ARCH_VARIANT is set, it is freestanding and static, and checks every
+ processor before any dynamic loader, shell, or init system runs. It reports
+ missing CPU features, and halts on failure. Non-variant builds provide a
+ dynamically linked no-op chainloader so image builders can use a uniform
+ dependency and handoff.
+ .
+ Variant requirements are resolved from dpkg's varianttable at build time.
+ On success the configured successor is executed with the original arguments
+ and environment.

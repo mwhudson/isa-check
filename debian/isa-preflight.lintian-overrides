@@ -1,0 +1,6 @@
+# Copyright (C) 2026 Canonical Ltd
+# SPDX-License-Identifier: GPL-3.0-only
+# The variant initramfs entry point must run before the dynamic loader and libc,
+# including on processors which do not support the installed ISA variant.
+# This override is installed only for variant builds.
+isa-preflight: statically-linked-binary [usr/lib/isa-preflight/isa-preflight]
