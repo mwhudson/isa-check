@@ -60,6 +60,9 @@ else
 endif
 
 install_man('man/isa-preflight.8')
+install_data('dracut/99preinit/module-setup.sh',
+             install_mode: 'rwxr-xr-x',
+             install_dir: 'lib/dracut/modules.d/99preinit')
 
 check_static = find_program('tests/check-static.sh')
 check_dynamic = find_program('tests/check-dynamic.sh')
@@ -82,6 +85,10 @@ test('dynamic-base', check_dynamic,
 test('run-base', run_tests,
      args: [base_test.full_path(), base_test_root, '', 'yes'],
      depends: [base_test], timeout: 30)
+test('dracut-module', find_program('tests/test-dracut-module.sh'),
+     args: [preflight.full_path(),
+            meson.current_source_dir() / 'dracut/99preinit/module-setup.sh'],
+     depends: [preflight], timeout: 30)
 
 # Tests use the in-tree table, so they do not depend on dpkg's contents.
 test_table = meson.current_source_dir() / 'tests/varianttable'

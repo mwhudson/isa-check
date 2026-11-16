@@ -1,0 +1,48 @@
+#!/bin/sh
+# Copyright (C) 2026 Canonical Ltd
+# SPDX-License-Identifier: GPL-3.0-only
+
+set -eu
+
+if [ -n "${AUTOPKGTEST_TMP-}" ]; then
+        workdir="$AUTOPKGTEST_TMP/dracut-module"
+        mkdir -p "$workdir"
+else
+        workdir=$(mktemp -d)
+fi
+trap 'rm -rf "$workdir"' EXIT HUP INT TERM
+
+check_init() {
+        test -x "$1/init"
+        test ! -L "$1/init"
+        cmp /usr/lib/isa-preflight/isa-preflight "$1/init"
+        interpreter=$(readelf -lW "$1/init" | awk '/Requesting program interpreter:/ {
+                sub(/\]$/, "", $NF); print $NF
+        }')
+        if [ -n "$interpreter" ]; then
+                test -x "$1$interpreter"
+        fi
+}
+
+# Exercise the installed module with dracut's regular shell init provider.
+dracut --force --no-kernel --no-hostonly --no-compress \
+        --modules 'base preinit bash' "$workdir/base.img"
+mkdir "$workdir/base"
+cpio -idm --quiet --no-absolute-filenames -D "$workdir/base" < "$workdir/base.img"
+check_init "$workdir/base"
+next_init=$(cat "$workdir/base/etc/isa-preflight/next-init")
+case $next_init in
+        /*) ;;
+        *) echo 'The base successor is not an absolute path' >&2; exit 1 ;;
+esac
+test -x "$workdir/base$next_init"
+
+# A systemd init symlink is replaced by a direct handoff to its real target.
+dracut --force --no-kernel --no-hostonly --no-compress \
+        --modules 'systemd preinit' "$workdir/systemd.img"
+mkdir "$workdir/systemd"
+cpio -idm --quiet --no-absolute-filenames -D "$workdir/systemd" < "$workdir/systemd.img"
+check_init "$workdir/systemd"
+test "$(cat "$workdir/systemd/etc/isa-preflight/next-init")" = /usr/lib/systemd/systemd
+test -x "$workdir/systemd/usr/lib/systemd/systemd"
+test ! -e "$workdir/systemd/init.dracut"

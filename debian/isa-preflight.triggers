@@ -1,0 +1,2 @@
+# Refresh embedded executables on installation, upgrade, and removal.
+activate-noawait update-initramfs

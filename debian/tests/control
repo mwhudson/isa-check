@@ -1,0 +1,3 @@
+Tests: dracut-module
+Restrictions: allow-stderr
+Depends: binutils, cpio, dracut-core, isa-preflight, systemd

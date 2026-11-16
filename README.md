@@ -55,9 +55,23 @@ without table entries return an empty list with status 1.
 
 ## Initramfs handoff
 
-Install `isa-preflight` as `/init` in the initramfs and write the absolute path
-of its successor to `/etc/isa-preflight/next-init`. The non-variant chainloader
-requires the image's libc and dynamic loader.
+The package installs a late dracut module as
+`/usr/lib/dracut/modules.d/99preinit`. Installing or removing `isa-preflight`
+therefore enables or disables the integration without changing dracut itself.
+Installation, upgrades, and removal activate Ubuntu's `update-initramfs` trigger
+so the configured initramfs generator refreshes existing images. The generator's
+update policy controls which kernels are refreshed; images generated or managed
+separately must be rebuilt by their image builder.
+The module runs after dracut's init providers, installs `isa-preflight` as
+`/init`, and writes `/etc/isa-preflight/next-init`. A symlinked init, such as
+`init -> usr/lib/systemd/systemd`, is replaced with a handoff directly to its
+resolved target. A regular init script is preserved as `/init.dracut`. With
+`squash-lib`, only the outer loader is wrapped; the inner init is unchanged.
+Absolute and relative symlink chains are resolved entirely inside the image,
+including symlinks in parent directories.
+The non-variant chainloader reuses the image's libc and dynamic loader. Dracut
+installs its runtime dependencies into the same root as `/init`, including the
+outer loader's root when squash is used.
 
 Arguments and environment are preserved during handoff. The variant checker
 mounts proc if needed, unmounts it again before the handoff, and runs with

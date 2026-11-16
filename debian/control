@@ -32,4 +32,5 @@ Description: verify CPU features or chain-load initramfs userspace
  .
  Variant requirements are resolved from dpkg's varianttable at build time.
  On success the configured successor is executed with the original arguments
- and environment.
+ and environment. The included dracut module automatically installs the
+ chainloader and configures its successor when isa-preflight is installed.
