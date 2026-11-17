@@ -191,11 +191,13 @@ TTYPath=/dev/console
     if not installed_variant:
         installed_squash = image('installed-squash', installed, 'systemd', squash=True)
         boot(kernel, installed_squash, 'max', artifacts / 'installed-squash.log', provider='systemd')
+    variant_images = {}
     for provider in ('shell', 'systemd'):
         generated = image(f'variant-{provider}', variant, provider)
+        variant_images[provider] = generated
         boot(kernel, generated, 'max', artifacts / f'variant-{provider}.log', provider=provider)
         boot(kernel, generated, 'max,-avx2', artifacts / f'no-avx2-{provider}.log', missing='avx2')
-    boot(kernel, generated, 'qemu64', artifacts / 'baseline-cpu.log', missing='avx2')
+    boot(kernel, variant_images['systemd'], 'qemu64', artifacts / 'baseline-cpu.log', missing='avx2')
     squashed = image('variant-squash', variant, 'systemd', squash=True)
     boot(kernel, squashed, 'max', artifacts / 'variant-squash.log', provider='systemd')
     boot(kernel, squashed, 'max,-avx2', artifacts / 'no-avx2-squash.log', missing='avx2')
