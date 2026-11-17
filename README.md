@@ -80,19 +80,18 @@ the program pauses indefinitely.
 
 ## Installed-package tests
 
-The autopkgtests check the installed CLI against dpkg's table, dracut image
-construction, and initramfs-update trigger activation across installation,
-upgrade, and removal. On amd64, the QEMU test boots generated images using TCG
-system emulation, so it needs neither KVM nor matching host CPU features.
-It checks PID 1 handoff, arguments and environment, proc cleanup, shell and
-systemd successors, squash integration, and diagnostics followed by a halt on
-unsupported processors. The variant cases build the production amd64v3 checker
-against the installed dpkg table, without the unit-test halt override.
+The `check` autopkgtest compares the installed CLI with an independent reading
+of dpkg's table and `/proc/cpuinfo`. On amd64, the `boot` test uses dracut's own
+test framework (`dracut-test`) to build initramfs images with the installed
+module and boot a test root disk under QEMU TCG, so it needs neither KVM nor
+matching host CPU features. It boots the installed checker with and without
+`squash-lib`, and a production amd64v3 checker built from source against the
+installed dpkg table, which must also halt with a diagnostic on a processor
+without AVX2.
 
 Run the tests against built packages in an Ubuntu testbed with `autopkgtest`.
-The QEMU test needs root to read the packaged kernel and construct images with
-device nodes; its dependencies include `linux-image-virtual`, `qemu-system-x86`,
-and the source build dependencies. Guest console logs are saved as test artifacts.
+The `boot` test needs root to read the packaged kernel; its dependencies include
+`dracut-test` and the source build dependencies.
 
 ## Ubuntu maintenance
 

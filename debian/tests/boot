@@ -1,0 +1,92 @@
+#!/bin/bash
+# Copyright (C) 2026 Canonical Ltd
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Boot dracut images wrapped by isa-preflight using dracut's own test framework
+# (dracut-test). Each image mounts a test root disk, which prints "All OK".
+set -eu
+
+# shellcheck disable=SC2034
+TEST_DESCRIPTION="isa-preflight early-boot handoff"
+testdir=/usr/lib/dracut/test
+source_dir=$PWD
+installed=/usr/lib/isa-preflight/isa-preflight
+export ARCH=amd64 DRACUT=dracut PKGLIBDIR=/usr/lib/dracut V=1
+work=${AUTOPKGTEST_TMP:-$(mktemp -d)}
+# test-functions keeps its log in the working directory and deletes TESTDIR.
+export TESTDIR=$work/boot
+mkdir -p "$TESTDIR"
+cd "$work"
+
+# Build an image with the given checker and check that it wraps the original init.
+make_image() {
+    local name=$1 checker=$2
+    shift 2
+
+    # shellcheck disable=SC2034 # read by test_dracut
+    TEST_DRACUT_ARGS=
+    # Keep the checker byte-identical; an unpackaged build is not yet stripped.
+    DRACUT_PREINIT=$checker test_dracut --nostrip "$@"
+    mv "$TESTDIR/initramfs.testing" "$TESTDIR/$name.img"
+    lsinitrd -f init "$TESTDIR/$name.img" | cmp - "$checker"
+    # Read the whole listing: test-functions enables pipefail.
+    lsinitrd "$TESTDIR/$name.img" | grep -E ' next-init( -> .*)?$' > /dev/null
+}
+
+# TCG keeps the emulated CPU features independent of the host.
+boot() {
+    local name=$1 cpu=$2
+
+    : > "$QEMU_LOGFILE"
+    NO_KVM=1 QEMU_CPU=$cpu "$testdir"/run-qemu -nic none "${disk_args[@]}" \
+        -append "root=LABEL=dracut $TEST_KERNEL_CMDLINE" \
+        -initrd "$TESTDIR/$name.img" &
+    boot_pid=$!
+}
+
+expect_success() {
+    boot "$@"
+    wait "$boot_pid"
+    check_qemu_log
+}
+
+# Linux HALT leaves QEMU running, so stop it once the kernel reports the halt.
+expect_halt() {
+    boot "$@"
+    until grep -q 'reboot: System halted' "$QEMU_LOGFILE"; do
+        kill -0 "$boot_pid" 2> /dev/null || return 1
+        sleep 1
+    done
+    kill "$boot_pid"
+    wait "$boot_pid" || :
+    grep -q 'ERROR: This installation requires amd64v3' "$QEMU_LOGFILE"
+    grep -q avx2 "$QEMU_LOGFILE"
+    ! grep -q '^All OK' "$QEMU_LOGFILE"
+}
+
+test_setup() {
+    build_client_rootfs "$TESTDIR/rootfs"
+    build_ext4_image "$TESTDIR/rootfs" "$TESTDIR/root.img" dracut
+
+    # Also cover the production amd64v3 checker when the base package is installed.
+    meson setup "$TESTDIR/build" "$source_dir" --buildtype=release -Dvariant=amd64v3
+    meson compile -C "$TESTDIR/build" isa-preflight
+
+    make_image installed "$installed"
+    make_image installed-squash "$installed" --add squash-squashfs
+    make_image variant "$TESTDIR/build/isa-preflight"
+}
+
+test_run() {
+    declare -a disk_args=()
+    qemu_add_drive disk_args "$TESTDIR/root.img" root
+
+    expect_success installed max
+    expect_success installed-squash max
+    expect_success variant max
+    expect_halt variant max,-avx2
+}
+
+set -- --all
+# shellcheck disable=SC1091
+. "$testdir"/test-functions
