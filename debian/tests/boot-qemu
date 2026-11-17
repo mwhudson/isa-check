@@ -107,7 +107,7 @@ with tempfile.TemporaryDirectory(prefix='isa-boot-', dir=os.environ.get('AUTOPKG
     modules.mkdir()
     for item in Path('/usr/lib/dracut/modules.d').iterdir():
         (modules / item.name).symlink_to(item)
-    observer_module = modules / '98isa-test'
+    observer_module = modules / '94isa-test'
     observer_module.mkdir()
     shutil.copyfile(source / 'debian/tests/boot-module.sh', observer_module / 'module-setup.sh')
 

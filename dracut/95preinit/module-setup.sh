@@ -4,7 +4,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Run after the modules which install /init. In particular, this must follow
-# 10systemd, 80base, and the initial installation pass of 88squash-lib.
+# 10systemd, 80base, and the initial installation pass of 88squash-lib. Leave
+# 96-99 free for modules which need to run after this one.
 check() {
     local _checker=${DRACUT_PREINIT:-${dracutsysrootdir-}/usr/lib/isa-preflight/isa-preflight}
 

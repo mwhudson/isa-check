@@ -56,7 +56,7 @@ without table entries return an empty list with status 1.
 ## Initramfs handoff
 
 The package installs a late dracut module as
-`/usr/lib/dracut/modules.d/99preinit`. Installing or removing `isa-preflight`
+`/usr/lib/dracut/modules.d/95preinit`. Installing or removing `isa-preflight`
 therefore enables or disables the integration without changing dracut itself.
 Installation, upgrades, and removal activate Ubuntu's `update-initramfs` trigger
 so the configured initramfs generator refreshes existing images. The generator's

@@ -1,3 +1,3 @@
-usr/lib/dracut/modules.d/99preinit/module-setup.sh
+usr/lib/dracut/modules.d/95preinit/module-setup.sh
 usr/lib/isa-preflight/isa-preflight
 usr/share/man/man8/isa-preflight.8

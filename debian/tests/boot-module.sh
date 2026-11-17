@@ -18,7 +18,7 @@ install() {
         # replace this module's functions.
         # shellcheck disable=SC1091
         _real_init=$(
-            source /usr/lib/dracut/modules.d/99preinit/module-setup.sh
+            source /usr/lib/dracut/modules.d/95preinit/module-setup.sh
             preinit_resolve_init "$_root"
         ) || exit 1
         rm "$_root/init"

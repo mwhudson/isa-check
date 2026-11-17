@@ -50,7 +50,7 @@ started as (normally
 LF and CRLF line endings are accepted.
 .SH DRACUT INTEGRATION
 The package installs
-.IR /usr/lib/dracut/modules.d/99preinit/module-setup.sh .
+.IR /usr/lib/dracut/modules.d/95preinit/module-setup.sh .
 The late module is included automatically when the preflight executable is
 available, so installing or removing the package enables or disables the
 integration without modifying dracut. The module runs after dracut's init

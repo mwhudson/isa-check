@@ -30,9 +30,9 @@ with tempfile.TemporaryDirectory(prefix='isa-trigger-', dir=os.environ.get('AUTO
     modules = tree / 'modules.d'
     modules.mkdir()
     for item in Path('/usr/lib/dracut/modules.d').iterdir():
-        if item.name != '99preinit':
+        if item.name != '95preinit':
             (modules / item.name).symlink_to(item)
-    (modules / '99preinit').symlink_to(root / 'usr/lib/dracut/modules.d/99preinit')
+    (modules / '95preinit').symlink_to(root / 'usr/lib/dracut/modules.d/95preinit')
 
     receiver = work / 'receiver'
     control = receiver / 'DEBIAN'
@@ -80,7 +80,7 @@ Description: installed preflight files in an isolated test database
 ''')
         shutil.copyfile('/var/lib/dpkg/info/isa-preflight.triggers', control / 'triggers')
         for name in ('usr/lib/isa-preflight/isa-preflight',
-                     'usr/lib/dracut/modules.d/99preinit/module-setup.sh'):
+                     'usr/lib/dracut/modules.d/95preinit/module-setup.sh'):
             dest = package / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(Path('/') / name, dest)
