@@ -5,18 +5,19 @@
 
 Small tools for checking processor architecture variants:
 
-- **isa-check** lists or probes compatible native-architecture variants using dpkg's
-  `/usr/share/dpkg/varianttable` and the CPU flags reported in `/proc/cpuinfo`.
-- **isa-preflight** is an initramfs entry point. Freestanding static variant
-  builds check CPU requirements before handing off to userspace; dynamically
-  linked non-variant builds simply chain-load the next init program. Variant
-  checking currently supports x86-64.
+- **isa-check** lists or probes compatible native-architecture variants using
+  dpkg's `/usr/share/dpkg/varianttable` and the CPU flags reported in
+  `/proc/cpuinfo`.
+- **isa-preflight** is an initramfs entry point. For variant builds, this checks
+  CPU requirements before chain-loading the next init program; non-variant
+  builds simply chain-load unconditionally. Variant checking currently supports
+  x86-64.
 
 ## Build and test
 
-Requires a C compiler, Linux headers, libc development files, Meson
-0.63 or newer, Ninja, awk, binutils, Bash and coreutils. Unit tests use the
-in-tree variant table; a variant build needs dpkg's table or an explicit override.
+Requires a C compiler, Linux headers, libc development files, Meson 0.63 or
+newer, Ninja, awk, binutils, bash and coreutils. Unit tests use the in-tree
+variant table; a variant build needs dpkg's table or an explicit override.
 
 ```sh
 meson setup build --prefix=/usr
@@ -55,28 +56,38 @@ without table entries return an empty list with status 1.
 
 ## Initramfs handoff
 
-The package installs a dracut module as
-`/usr/lib/dracut/modules.d/95preinit`. Installing or removing `isa-preflight`
-therefore enables or disables the integration without changing dracut itself.
-Installation, upgrades, and removal activate Ubuntu's `update-initramfs` trigger
-so the configured initramfs generator refreshes existing images. The generator's
-update policy controls which kernels are refreshed; images generated or managed
-separately must be rebuilt by their image builder.
-The module runs after dracut's init providers, moves the original `/init`
-(a regular script or a symlink such as `init -> usr/lib/systemd/systemd`) to
-`/next-init`, and installs `isa-preflight` as `/init`. Both builds execute
-`/next-init` on success. With `squash-lib`, only the outer loader is wrapped;
-the inner init is unchanged. Booting with `rdinit=/next-init` bypasses the
-check.
-The non-variant chainloader reuses the image's libc and dynamic loader. Dracut
-installs its runtime dependencies into the same root as `/init`, including the
-outer loader's root when squash is used.
+`isa-preflight` for variant builds is a freestanding (no libgcc, no glibc code
+used either statically or dynamically) binary built using only baseline
+instructions that checks the CPU features of the system match the variant it was
+built for before executing `/next-init`.  For a non-variant build it is a
+regular dynamic binary that just executes `/next-init`, to allow image
+construction to be unconditional.
+
+The variant requirements are read from dpkg's variant table at build time and
+embedded in the binary, so variant packages must be rebuilt when the table's
+requirements change.
+
+The package installs a dracut module as `/usr/lib/dracut/modules.d/95preinit`.
+Installing or removing `isa-preflight` therefore enables or disables the
+integration without changing dracut itself.  Installation, upgrades, and removal
+activate the `update-initramfs` trigger, which regenerates the newest kernel's
+initramfs; images for other kernels, and images built separately, must be
+regenerated explicitly.
+
+The module runs after dracut's init providers, moves the original `/init` (a
+regular script or a symlink such as `init -> usr/lib/systemd/systemd`) to
+`/next-init`, and installs `isa-preflight` as `/init`.
+
+With `squash-lib`, only the outer loader is wrapped; the inner init is
+unchanged. Dracut installs the runtime dependencies of `isa-preflight` into the
+same root as `/init`, including the outer loader's root when squash is used.
+
+Booting with `rdinit=/next-init` bypasses the check.
 
 Arguments and environment are preserved during handoff. The variant checker
-mounts proc if needed, unmounts it again before the handoff, and runs with
-baseline x86-64 instructions. The successor receives `argv[0]` unchanged
-(normally `/init`). Errors halt the system when running as PID 1; otherwise
-the program pauses indefinitely.
+mounts proc if needed and unmounts it again before the handoff. The successor
+receives `argv[0]` unchanged (normally `/init`). Errors halt the system when
+running as PID 1; otherwise the program pauses indefinitely.
 
 ## Installed-package tests
 
@@ -93,22 +104,5 @@ Run the tests against built packages in an Ubuntu testbed with `autopkgtest`.
 The `boot` test needs root to read the packaged kernel; its dependencies include
 `dracut-test` and the source build dependencies.
 
-## Ubuntu maintenance
-
-The base preflight dynamically links libc; the freestanding variant build
-incorporates neither libc nor GCC runtime libraries. Image builders must refresh
-initramfs copies of the dynamic runtime when applying runtime security updates.
-Updating dpkg's variant requirements also requires rebuilding
-the affected variant packages, since their requirements are embedded.
-
-Main inclusion needs an owning Ubuntu team to accept those responsibilities and
-subscribe to package bugs, plus a seed or reverse dependency identifying the
-binary packages to promote. `isa-support` handles package-installation ISA
-requirements; this package additionally checks before ISA-dependent initramfs
-userspace can execute and provides a dpkg-table-driven variant selection CLI.
-Record the owning team's acceptance and the security review in the MIR bug.
-Choose the target suite in `debian/changelog` when preparing the upload.
-
 See [`isa-check(8)`](man/isa-check.8) and
-[`isa-preflight(8)`](man/isa-preflight.8) for details. Licensing information is in
-[`debian/copyright`](debian/copyright).
+[`isa-preflight(8)`](man/isa-preflight.8) for details.
