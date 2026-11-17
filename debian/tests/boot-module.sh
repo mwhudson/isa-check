@@ -14,9 +14,13 @@ install() {
     fi
     if [[ -L $_root/init ]]; then
         # Use the installed resolver to keep all links inside this image.
+        # Source it in a subshell so that its check() and install() do not
+        # replace this module's functions.
         # shellcheck disable=SC1091
-        source /usr/lib/dracut/modules.d/99preinit/module-setup.sh
-        _real_init=$(preinit_resolve_init "$_root") || exit 1
+        _real_init=$(
+            source /usr/lib/dracut/modules.d/99preinit/module-setup.sh
+            preinit_resolve_init "$_root"
+        ) || exit 1
         rm "$_root/init"
         ln -s /usr/lib/isa-preflight-test/observer "$_root/init"
         dstdir="$_root" inst_simple "$ISA_TEST_OBSERVER" /usr/lib/isa-preflight-test/observer
