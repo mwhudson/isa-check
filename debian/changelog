@@ -1,4 +1,4 @@
-isa-check (0.1) UNRELEASED; urgency=medium
+isa-check (0.1ubuntu) UNRELEASED; urgency=medium
 
   * Initial release.
     - Build the CLI on all architectures and support native ARM feature fields.
