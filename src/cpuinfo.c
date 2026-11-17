@@ -243,25 +243,39 @@ int cpu_read_flags(char *flags, unsigned long capacity) {
         return 0;
 }
 
-/* Append a feature to the list, or leave the list as it is if it does not fit. */
-static void append_missing(char *missing, unsigned long capacity, const char *feature, unsigned long length) {
-        unsigned long used = isa_string_length(missing);
+/* Append text to the list, which must have room for it. */
+static void append_text(char *missing, unsigned long *used, const char *text, unsigned long length) {
         unsigned long i;
 
-        if (used + (used ? 2 : 0) + length >= capacity)
-                return;
-        if (used) {
-                missing[used++] = ',';
-                missing[used++] = ' ';
+        if (*used) {
+                missing[(*used)++] = ',';
+                missing[(*used)++] = ' ';
         }
         for (i = 0; i < length; i++)
-                missing[used++] = feature[i];
-        missing[used] = '\0';
+                missing[(*used)++] = text[i];
+        missing[*used] = '\0';
+}
+
+/* Append a feature to the list. Room is always kept for a final ", ...", which
+ * replaces the first feature that does not fit and everything after it. */
+static void append_missing(char *missing, unsigned long capacity, int *truncated, const char *feature,
+                           unsigned long length) {
+        unsigned long used = isa_string_length(missing);
+
+        if (*truncated)
+                return;
+        if (used + (used ? 2 : 0) + length + 5 < capacity) {
+                append_text(missing, &used, feature, length);
+        } else if (used + (used ? 2 : 0) + 3 < capacity) {
+                append_text(missing, &used, "...", 3);
+                *truncated = 1;
+        }
 }
 
 int cpu_missing_features(const char *flags, const char *required, char *missing, unsigned long missing_capacity) {
         const char *start = required;
         int missing_count = 0;
+        int truncated = 0;
 
         if (missing_capacity == 0)
                 return CPU_ERROR_INVALID_REQUIREMENTS;
@@ -275,7 +289,7 @@ int cpu_missing_features(const char *flags, const char *required, char *missing,
                 if (end == start)
                         return CPU_ERROR_INVALID_REQUIREMENTS;
                 if (!has_token(flags, start, (unsigned long) (end - start))) {
-                        append_missing(missing, missing_capacity, start, (unsigned long) (end - start));
+                        append_missing(missing, missing_capacity, &truncated, start, (unsigned long) (end - start));
                         missing_count++;
                 }
                 if (!*end)

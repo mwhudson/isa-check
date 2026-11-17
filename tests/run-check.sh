@@ -115,6 +115,17 @@ output=$($binary --table "$table" amd64v3 2>&1)
 set -e
 [[ $output == 'amd64v3 is not supported: avx, avx2, bmi1, bmi2, f16c, fma, abm, movbe, xsave' ]]
 
+# A list too long to report in full is marked as truncated.
+many=$(printf 'missing%03d,' $(seq 100))
+printf 'amd64-many amd64 lm,%s\n' "${many%,}" > "$test_root/many-table"
+set +e
+output=$($binary --table "$test_root/many-table" amd64-many 2>&1)
+status=$?
+set -e
+[[ $status -eq 1 ]]
+[[ $output == 'amd64-many is not supported: missing001, missing002, '*', ...' ]]
+[[ $output != *lm* && $output != *missing100* ]]
+
 # Missing cpuinfo is a read error, not a reason for the probe to mount /proc.
 rm -f "$test_root/cpuinfo"
 set +e
