@@ -63,6 +63,30 @@ if [[ $base != yes ]]; then
     printf 'processor\t: 0\nflags\t\t: %s\n' "$cpu_flags" > "$test_root/cpuinfo"
 fi
 
+# Both builds accept a successor path that exactly fills the 4096-byte buffer,
+# with or without a final newline, and reject one byte more.
+long_dir=$test_root
+while (( 4095 - ${#long_dir} - 1 > 255 )); do
+    long_dir+=/$(printf '%200s' '' | tr ' ' d)
+done
+mkdir -p "$long_dir"
+long_init=$long_dir/$(printf "%$((4095 - ${#long_dir} - 1))s" '' | tr ' ' i)
+[[ ${#long_init} -eq 4095 ]]
+cp "$test_root/next-init" "$long_init"
+for terminator in '\n' ''; do
+    printf "%s$terminator" "$long_init" > "$config/next-init"
+    output=$(PREFLIGHT_MARKER=unit-test "$binary" first second)
+    [[ $output == 'NEXT_INIT_RAN argv=first second marker=unit-test' ]]
+done
+printf '%sx\n' "$long_init" > "$config/next-init"
+set +e
+output=$("$binary" 2>&1)
+status=$?
+set -e
+[[ $status -eq 1 ]]
+[[ $output != *NEXT_INIT_RAN* ]]
+printf '%s\n' "$test_root/next-init" > "$config/next-init"
+
 # The successor is deliberately runtime configuration, not a compiled path.
 printf '%s\n' relative-init > "$config/next-init"
 set +e

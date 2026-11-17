@@ -42,9 +42,14 @@ int main(int argc, char **argv, char **envp) {
                 fclose(file);
                 fail("could not read " NEXT_INIT_PATH);
         }
-        if (!strchr(next_init, '\n') && !feof(file)) {
-                fclose(file);
-                fail("next init path is too long");
+        /* A line which exactly fills the buffer still fits if it ends here. */
+        if (!strchr(next_init, '\n')) {
+                int c = getc(file);
+
+                if (c != EOF && c != '\n') {
+                        fclose(file);
+                        fail("next init path is too long");
+                }
         }
         fclose(file);
 
