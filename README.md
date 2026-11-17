@@ -79,6 +79,38 @@ baseline x86-64 instructions. The successor receives `argv[0]` unchanged
 (normally `/init`). Errors halt the system when running as PID 1; otherwise
 the program pauses indefinitely.
 
+## Installed-package tests
+
+The autopkgtests check the installed CLI against dpkg's table, dracut image
+construction, and initramfs-update trigger activation across installation,
+upgrade, and removal. On amd64, the QEMU test boots generated images using TCG
+system emulation, so it needs neither KVM nor matching host CPU features.
+It checks PID 1 handoff, arguments and environment, proc cleanup, shell and
+systemd successors, squash integration, and diagnostics followed by a halt on
+unsupported processors. The variant cases build the production amd64v3 checker
+against the installed dpkg table, without the unit-test halt override.
+
+Run the tests against built packages in an Ubuntu testbed with `autopkgtest`.
+The QEMU test needs root to read the packaged kernel and construct images with
+device nodes; its dependencies include `linux-image-virtual`, `qemu-system-x86`,
+and the source build dependencies. Guest console logs are saved as test artifacts.
+
+## Ubuntu maintenance
+
+The base preflight dynamically links libc; the freestanding variant build
+incorporates neither libc nor GCC runtime libraries. Image builders must refresh
+initramfs copies of the dynamic runtime when applying runtime security updates.
+Updating dpkg's variant requirements also requires rebuilding
+the affected variant packages, since their requirements are embedded.
+
+Main inclusion needs an owning Ubuntu team to accept those responsibilities and
+subscribe to package bugs, plus a seed or reverse dependency identifying the
+binary packages to promote. `isa-support` handles package-installation ISA
+requirements; this package additionally checks before ISA-dependent initramfs
+userspace can execute and provides a dpkg-table-driven variant selection CLI.
+Record the owning team's acceptance and the security review in the MIR bug.
+Choose the target suite in `debian/changelog` when preparing the upload.
+
 See [`isa-check(8)`](man/isa-check.8) and
 [`isa-preflight(8)`](man/isa-preflight.8) for details. Licensing information is in
 [`debian/copyright`](debian/copyright).

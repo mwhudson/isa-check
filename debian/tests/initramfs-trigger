@@ -1,0 +1,111 @@
+#!/usr/bin/python3
+# Copyright (C) 2026 Canonical Ltd
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Exercise the installed activation trigger in an isolated dpkg database."""
+
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+
+def run(*args, **kwargs):
+    subprocess.run(args, check=True, **kwargs)
+
+
+with tempfile.TemporaryDirectory(prefix='isa-trigger-', dir=os.environ.get('AUTOPKGTEST_TMP')) as tmp:
+    work = Path(tmp)
+    root = work / 'root'
+    database = root / 'var/lib/dpkg'
+    database.mkdir(parents=True)
+    (database / 'status').touch()
+    (root / 'empty').mkdir()
+    tree = root / 'dracut'
+    tree.mkdir()
+    for item in Path('/usr/lib/dracut').iterdir():
+        if item.name != 'modules.d':
+            (tree / item.name).symlink_to(item)
+    modules = tree / 'modules.d'
+    modules.mkdir()
+    for item in Path('/usr/lib/dracut/modules.d').iterdir():
+        if item.name != '99preinit':
+            (modules / item.name).symlink_to(item)
+    (modules / '99preinit').symlink_to(root / 'usr/lib/dracut/modules.d/99preinit')
+
+    receiver = work / 'receiver'
+    control = receiver / 'DEBIAN'
+    control.mkdir(parents=True)
+    (control / 'control').write_text('''Package: isa-preflight-test-receiver
+Version: 1
+Architecture: all
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Description: isolated initramfs-update trigger receiver
+''')
+    (control / 'triggers').write_text('interest-noawait update-initramfs\n')
+    postinst = control / 'postinst'
+    postinst.write_text('''#!/bin/sh
+set -eu
+[ "$1" = triggered ] || exit 0
+modules='base bash'
+checker="$DPKG_ROOT/usr/lib/isa-preflight/isa-preflight"
+if [ -x "$checker" ]; then
+    modules="$modules preinit"
+    cat "$DPKG_ROOT/usr/share/isa-preflight-test/version" >> "$DPKG_ROOT/events"
+else
+    printf 'removed\\n' >> "$DPKG_ROOT/events"
+fi
+dracutbasedir="$DPKG_ROOT/dracut" DRACUT_PREINIT="$checker" \\
+    dracut --force --no-kernel --no-hostonly --no-compress --nostrip \\
+    --conf /dev/null --confdir "$DPKG_ROOT/empty" --tmpdir "$DPKG_ROOT" \\
+    --modules "$modules" "$DPKG_ROOT/image.img"
+''')
+    postinst.chmod(0o755)
+    receiver_deb = work / 'receiver.deb'
+    run('dpkg-deb', '--build', '--root-owner-group', str(receiver), str(receiver_deb))
+    dpkg = ['dpkg', f'--root={root}', f'--log={work / "dpkg.log"}',
+            '--force-script-chrootless', '--force-not-root']
+    run(*dpkg, '--install', str(receiver_deb))
+
+    def sender(version):
+        package = work / f'sender-{version}'
+        control = package / 'DEBIAN'
+        control.mkdir(parents=True)
+        (control / 'control').write_text(f'''Package: isa-preflight
+Version: {version}
+Architecture: all
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Description: installed preflight files in an isolated test database
+''')
+        shutil.copyfile('/var/lib/dpkg/info/isa-preflight.triggers', control / 'triggers')
+        for name in ('usr/lib/isa-preflight/isa-preflight',
+                     'usr/lib/dracut/modules.d/99preinit/module-setup.sh'):
+            dest = package / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(Path('/') / name, dest)
+        marker = package / 'usr/share/isa-preflight-test/version'
+        marker.parent.mkdir(parents=True)
+        marker.write_text(f'{version}\n')
+        archive = work / f'sender-{version}.deb'
+        run('dpkg-deb', '--build', '--root-owner-group', str(package), str(archive))
+        return archive
+
+    def check_image(present):
+        with (root / 'image.img').open('rb') as archive:
+            init = subprocess.check_output(
+                ['cpio', '--quiet', '-i', '--to-stdout', 'init'], stdin=archive)
+        if present:
+            assert init == Path('/usr/lib/isa-preflight/isa-preflight').read_bytes()
+        else:
+            assert init.startswith(b'#!/bin/sh'), 'removal did not restore dracut init'
+
+    run(*dpkg, '--install', str(sender('1')))
+    assert (root / 'events').read_text() == '1\n', 'installation did not activate the trigger'
+    check_image(True)
+    run(*dpkg, '--install', str(sender('2')))
+    assert (root / 'events').read_text() == '1\n2\n', 'upgrade did not activate the trigger'
+    check_image(True)
+    run(*dpkg, '--remove', 'isa-preflight')
+    assert (root / 'events').read_text() == '1\n2\nremoved\n', 'removal did not activate the trigger'
+    check_image(False)

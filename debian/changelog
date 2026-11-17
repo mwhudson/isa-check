@@ -6,5 +6,6 @@ isa-check (0.1) UNRELEASED; urgency=medium
     - Resolve init symlink chains inside the image root.
     - Dynamically link the no-op chainloader and include its initramfs
       dependencies.
+    - Add installed-package and QEMU early-boot regression tests.
 
  -- Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>  Fri, 06 Nov 2026 00:00:00 +0000

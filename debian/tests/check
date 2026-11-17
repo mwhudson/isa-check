@@ -1,0 +1,71 @@
+#!/bin/bash
+# Copyright (C) 2026 Canonical Ltd
+# SPDX-License-Identifier: GPL-3.0-only
+
+set -eu
+
+workdir=$(mktemp -d "${AUTOPKGTEST_TMP:-/tmp}/isa-check.XXXXXX")
+trap 'rm -rf "$workdir"' EXIT
+table=/usr/share/dpkg/varianttable
+native_arch=$(dpkg --print-architecture)
+awk -v native_arch="$native_arch" '$2 == native_arch { print }' "$table" > "$workdir/native-table"
+
+# Compare the installed CLI with an independent intersection of kernel flags.
+if [[ -s $workdir/native-table ]]; then
+awk '
+    /^(flags|Features)[ \t]*:/ {
+        sub(/^[^:]*:[ \t]*/, "")
+        delete current
+        for (i = 1; i <= NF; i++) current[$i] = 1
+        if (processors++ == 0) {
+            for (flag in current) common[flag] = 1
+        } else {
+            for (flag in common) if (!(flag in current)) delete common[flag]
+        }
+    }
+    END {
+        if (!processors) exit 1
+        for (flag in common) print flag
+    }
+' /proc/cpuinfo > "$workdir/flags"
+awk '
+    NR == FNR { available[$1] = 1; next }
+    {
+        supported = 1
+        n = split($3, required, ",")
+        for (i = 1; i <= n; i++) if (!(required[i] in available)) supported = 0
+        if (supported) print $1
+    }
+' "$workdir/flags" "$workdir/native-table" > "$workdir/expected"
+else
+    : > "$workdir/expected"
+fi
+status=0
+isa-check > "$workdir/actual" || status=$?
+if [[ -s $workdir/expected ]]; then
+    [[ $status -eq 0 ]]
+else
+    [[ $status -eq 1 ]]
+fi
+cmp "$workdir/expected" "$workdir/actual"
+
+while read -r variant arch flags; do
+    status=0
+    isa-check "$variant" > "$workdir/stdout" 2> "$workdir/stderr" || status=$?
+    [[ ! -s $workdir/stdout ]]
+    if grep -Fxq "$variant" "$workdir/expected"; then
+        [[ $status -eq 0 && ! -s $workdir/stderr ]]
+    else
+        [[ $status -eq 1 ]]
+        grep -Fq "$variant is not supported:" "$workdir/stderr"
+    fi
+done < "$workdir/native-table"
+
+status=0
+isa-check --table "$workdir/missing" > /dev/null 2> "$workdir/stderr" || status=$?
+[[ $status -eq 2 ]]
+grep -Fq 'could not open the variant table' "$workdir/stderr"
+status=0
+isa-check --table "$table" -- not-a-variant > /dev/null 2> "$workdir/stderr" || status=$?
+[[ $status -eq 2 ]]
+grep -Fq 'variant is not present in the table' "$workdir/stderr"

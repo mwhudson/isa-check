@@ -1,0 +1,201 @@
+#!/usr/bin/python3
+# Copyright (C) 2026 Canonical Ltd
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Boot real dracut images with production checkers under QEMU TCG."""
+
+import os
+from pathlib import Path
+import selectors
+import shutil
+import subprocess
+import tempfile
+import time
+
+
+def run(*args, **kwargs):
+    subprocess.run(args, check=True, **kwargs)
+
+
+def boot(kernel, image, cpu, log, provider=None, missing=None, variant_name='amd64v3'):
+    command = [
+        'qemu-system-x86_64', '-machine', 'pc', '-accel', 'tcg',
+        '-cpu', cpu, '-smp', '2', '-m', '512', '-display', 'none',
+        '-serial', 'stdio', '-monitor', 'none', '-nic', 'none', '-no-reboot',
+        '-kernel', str(kernel), '-initrd', str(image),
+        '-append', 'console=ttyS0 panic=-1 loglevel=6 '
+        'PREFLIGHT_MARKER=qemu-test -- test-argument',
+    ]
+    print(f'Booting {image.name}: cpu={cpu}', flush=True)
+    output = bytearray()
+    halted = False
+    with log.open('wb') as console, subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as guest:
+        selector = selectors.DefaultSelector()
+        selector.register(guest.stdout, selectors.EVENT_READ)
+        deadline = time.monotonic() + 120
+        try:
+            while time.monotonic() < deadline:
+                events = selector.select(timeout=1)
+                if events:
+                    chunk = os.read(guest.stdout.fileno(), 65536)
+                    if not chunk:
+                        break
+                    console.write(chunk)
+                    console.flush()
+                    output.extend(chunk)
+                    # Linux HALT leaves QEMU running; observing the kernel's
+                    # completion message proves the real reboot syscall ran.
+                    if b'reboot: System halted' in output:
+                        halted = True
+                        break
+                elif guest.poll() is not None:
+                    break
+            else:
+                raise AssertionError('guest boot timed out')
+            if halted:
+                guest.terminate()
+            status = guest.wait(timeout=10)
+        finally:
+            selector.close()
+            if guest.poll() is None:
+                guest.kill()
+                guest.wait()
+    text = output.decode(errors='replace')
+    try:
+        assert 'ISA_TEST_FAILED' not in text, text
+        assert 'Kernel panic' not in text, text
+        if missing is not None:
+            assert halted, 'unsupported CPU did not halt'
+            assert f'ERROR: This installation requires {variant_name}.' in text
+            assert missing in text
+            assert 'ISA_TEST_HANDOFF' not in text
+            assert 'ISA_TEST_PROVIDER' not in text
+        else:
+            assert status == 0 and not halted, f'guest exited with {status}'
+            assert ('ISA_TEST_HANDOFF: pid=1 argv0=/init argument=test-argument '
+                    'marker=qemu-test proc=unmounted') in text
+            assert f'ISA_TEST_PROVIDER: {provider}' in text
+    except AssertionError:
+        print(text, flush=True)
+        raise
+
+
+source = Path(__file__).resolve().parents[2]
+kernel_versions = subprocess.check_output(['linux-version', 'list'], text=True).splitlines()
+kernel_versions = subprocess.check_output(
+    ['linux-version', 'sort', '--reverse'], input='\n'.join(kernel_versions), text=True
+).splitlines()
+assert kernel_versions, 'no packaged kernel installed'
+kver = kernel_versions[0]
+kernel = Path('/boot') / f'vmlinuz-{kver}'
+assert kernel.is_file(), kernel
+artifacts = Path(os.environ.get('AUTOPKGTEST_ARTIFACTS', '/tmp'))
+artifacts.mkdir(parents=True, exist_ok=True)
+
+with tempfile.TemporaryDirectory(prefix='isa-boot-', dir=os.environ.get('AUTOPKGTEST_TMP')) as tmp:
+    work = Path(tmp)
+    empty = work / 'empty'
+    empty.mkdir()
+    # Use all real dracut modules, plus a test observer before installed preinit.
+    tree = work / 'dracut'
+    tree.mkdir()
+    for item in Path('/usr/lib/dracut').iterdir():
+        if item.name != 'modules.d':
+            (tree / item.name).symlink_to(item)
+    modules = tree / 'modules.d'
+    modules.mkdir()
+    for item in Path('/usr/lib/dracut/modules.d').iterdir():
+        (modules / item.name).symlink_to(item)
+    observer_module = modules / '98isa-test'
+    observer_module.mkdir()
+    shutil.copyfile(source / 'debian/tests/boot-module.sh', observer_module / 'module-setup.sh')
+
+    observer = work / 'observer'
+    run('cc', '-O2', '-Wall', '-Wextra', '-march=x86-64', '-static',
+        '-o', str(observer), str(source / 'debian/tests/boot-observer.c'))
+    service = work / 'isa-preflight-test.service'
+    service.write_text('''[Unit]
+Description=Report successful isa-preflight boot test
+DefaultDependencies=no
+After=systemd-journald.service
+Before=initrd.target
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/isa-preflight-test/finish
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/console
+''')
+
+    variant_build = work / 'build-v3'
+    run('meson', 'setup', str(variant_build), str(source), '--buildtype=release',
+        '-Dvariant=amd64v3', '-Dvarianttable=/usr/share/dpkg/varianttable')
+    run('meson', 'compile', '-C', str(variant_build), 'isa-preflight')
+    variant = variant_build / 'isa-preflight'
+    run(str(source / 'tests/check-static.sh'), str(variant))
+
+    def image(name, checker, provider, squash=False):
+        finish = work / f'finish-{name}.sh'
+        finish.write_text('#!/bin/sh\n'
+                          f'printf "ISA_TEST_PROVIDER: {provider}\\n"\n'
+                          '/usr/lib/isa-preflight-test/busybox poweroff -f\n')
+        finish.chmod(0o755)
+        env = dict(os.environ, dracutbasedir=str(tree), DRACUT_PREINIT=str(checker),
+                   ISA_TEST_OBSERVER=str(observer), ISA_TEST_FINISH=str(finish),
+                   ISA_TEST_SERVICE=str(service), ISA_TEST_PROVIDER=provider)
+        selected = 'base bash' if provider == 'shell' else 'systemd systemd-initrd'
+        selected += ' isa-test preinit'
+        if squash:
+            selected += ' squash-squashfs'
+        command = ['dracut', '--force', '--no-hostonly', '--no-compress', '--nostrip',
+                   '--stdlog', '4',
+                   '--conf', '/dev/null', '--confdir', str(empty), '--tmpdir', str(work),
+                   '--modules', selected, '--kver', kver]
+        if not squash:
+            command.append('--no-kernel')
+        result = work / f'{name}.img'
+        build_log = artifacts / f'{name}-build.log'
+        try:
+            with build_log.open('wb') as output:
+                run(*command, str(result), env=env, stdout=output, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError:
+            print(build_log.read_text(errors='replace'), flush=True)
+            raise
+        unpacked = work / name
+        unpacked.mkdir()
+        with result.open('rb') as archive:
+            run('cpio', '-idm', '--quiet', '--no-absolute-filenames',
+                '-D', str(unpacked), stdin=archive)
+        assert not (unpacked / 'init').is_symlink()
+        assert (unpacked / 'init').read_bytes() == checker.read_bytes()
+        if squash:
+            assert (unpacked / 'squashfs-root.img').is_file()
+        return result
+
+    installed = Path('/usr/lib/isa-preflight/isa-preflight')
+    installed_image = image('installed-shell', installed, 'shell')
+    boot(kernel, installed_image, 'max', artifacts / 'installed-shell.log', provider='shell')
+    installed_variant = subprocess.check_output(
+        ['dpkg-query', '-W', '-f=${Architecture-Variant}', 'isa-preflight'], text=True)
+    if not installed_variant:
+        # The installed no-op must also work on a baseline CPU.
+        boot(kernel, installed_image, 'qemu64', artifacts / 'installed-baseline.log', provider='shell')
+    elif installed_variant in ('amd64v3', 'amd64v4'):
+        boot(kernel, installed_image, 'max,-avx2', artifacts / 'installed-no-avx2.log',
+             missing='avx2', variant_name=installed_variant)
+        boot(kernel, installed_image, 'qemu64', artifacts / 'installed-baseline.log',
+             missing='avx2', variant_name=installed_variant)
+    installed_systemd = image('installed-systemd', installed, 'systemd')
+    boot(kernel, installed_systemd, 'max', artifacts / 'installed-systemd.log', provider='systemd')
+    if not installed_variant:
+        installed_squash = image('installed-squash', installed, 'systemd', squash=True)
+        boot(kernel, installed_squash, 'max', artifacts / 'installed-squash.log', provider='systemd')
+    for provider in ('shell', 'systemd'):
+        generated = image(f'variant-{provider}', variant, provider)
+        boot(kernel, generated, 'max', artifacts / f'variant-{provider}.log', provider=provider)
+        boot(kernel, generated, 'max,-avx2', artifacts / f'no-avx2-{provider}.log', missing='avx2')
+    boot(kernel, generated, 'qemu64', artifacts / 'baseline-cpu.log', missing='avx2')
+    squashed = image('variant-squash', variant, 'systemd', squash=True)
+    boot(kernel, squashed, 'max', artifacts / 'variant-squash.log', provider='systemd')
+    boot(kernel, squashed, 'max,-avx2', artifacts / 'no-avx2-squash.log', missing='avx2')

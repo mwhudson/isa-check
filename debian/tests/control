@@ -1,3 +1,16 @@
 Tests: dracut-module
 Restrictions: allow-stderr
 Depends: binutils, cpio, dracut-core, isa-preflight, systemd
+
+Tests: check
+Depends: isa-check
+
+Tests: initramfs-trigger
+Restrictions: allow-stderr
+Depends: isa-preflight, cpio, dpkg, dracut-core, python3
+
+Tests: boot-qemu
+Architecture: amd64
+Restrictions: needs-root, allow-stderr
+Depends: @builddeps@, isa-preflight, binutils, busybox-static, cpio, dracut-core,
+ linux-image-virtual, python3, qemu-system-x86, seabios, squashfs-tools, systemd
