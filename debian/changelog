@@ -3,7 +3,7 @@ isa-check (0.1) UNRELEASED; urgency=medium
   * Initial release.
     - Build the CLI on all architectures and support native ARM feature fields.
     - Refresh initramfs images on package installation, upgrade, and removal.
-    - Resolve init symlink chains inside the image root.
+    - Move the original /init to /next-init and hand off to it.
     - Dynamically link the no-op chainloader and include its initramfs
       dependencies.
     - Add installed-package and QEMU early-boot regression tests.

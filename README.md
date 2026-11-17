@@ -55,20 +55,19 @@ without table entries return an empty list with status 1.
 
 ## Initramfs handoff
 
-The package installs a late dracut module as
+The package installs a dracut module as
 `/usr/lib/dracut/modules.d/95preinit`. Installing or removing `isa-preflight`
 therefore enables or disables the integration without changing dracut itself.
 Installation, upgrades, and removal activate Ubuntu's `update-initramfs` trigger
 so the configured initramfs generator refreshes existing images. The generator's
 update policy controls which kernels are refreshed; images generated or managed
 separately must be rebuilt by their image builder.
-The module runs after dracut's init providers, installs `isa-preflight` as
-`/init`, and writes `/etc/isa-preflight/next-init`. A symlinked init, such as
-`init -> usr/lib/systemd/systemd`, is replaced with a handoff directly to its
-resolved target. A regular init script is preserved as `/init.dracut`. With
-`squash-lib`, only the outer loader is wrapped; the inner init is unchanged.
-Absolute and relative symlink chains are resolved entirely inside the image,
-including symlinks in parent directories.
+The module runs after dracut's init providers, moves the original `/init`
+(a regular script or a symlink such as `init -> usr/lib/systemd/systemd`) to
+`/next-init`, and installs `isa-preflight` as `/init`. Both builds execute
+`/next-init` on success. With `squash-lib`, only the outer loader is wrapped;
+the inner init is unchanged. Booting with `rdinit=/next-init` bypasses the
+check.
 The non-variant chainloader reuses the image's libc and dynamic loader. Dracut
 installs its runtime dependencies into the same root as `/init`, including the
 outer loader's root when squash is used.

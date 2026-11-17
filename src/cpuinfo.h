@@ -41,10 +41,6 @@ int cpu_read_flags(char *flags, unsigned long capacity);
  * cpu_error value. */
 int cpu_missing_features(const char *flags, const char *required, char *missing, unsigned long missing_capacity);
 
-/* Read the first line of path, without its line ending. Returns 1 for a line,
- * 0 for an empty file, or -1 for an open, read, or size error. */
-long isa_read_first_line(const char *path, char *line, unsigned long capacity);
-
 unsigned long isa_string_length(const char *string);
 
 #endif

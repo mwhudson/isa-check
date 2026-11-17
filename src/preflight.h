@@ -5,12 +5,11 @@
 #ifndef ISA_PREFLIGHT_H
 #define ISA_PREFLIGHT_H
 
-/* Shared by both isa-preflight builds. */
-#ifndef CONFIG_DIR
-#define CONFIG_DIR "/etc/isa-preflight"
+/* Shared by both isa-preflight builds: the dracut module moves the original
+ * /init here before installing isa-preflight in its place. */
+#ifndef NEXT_INIT_PATH
+#define NEXT_INIT_PATH "/next-init"
 #endif
-#define NEXT_INIT_PATH CONFIG_DIR "/next-init"
-#define NEXT_INIT_SIZE 4096
 
 #ifndef PROC_DIR
 #define PROC_DIR "/proc"

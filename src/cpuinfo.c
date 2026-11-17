@@ -61,34 +61,6 @@ static long read_line(struct reader *reader, char *line, unsigned long capacity)
         }
 }
 
-long isa_read_first_line(const char *path, char *line, unsigned long capacity) {
-        struct reader reader;
-        unsigned long i;
-        long result;
-
-        if (capacity == 0)
-                return -1;
-        reader.fd = isa_sys_open_readonly(path);
-        if (reader.fd < 0)
-                return -1;
-        reader.position = 0;
-        reader.length = 0;
-
-        result = read_line(&reader, line, capacity);
-        isa_sys_close((int) reader.fd);
-        if (result == READ_TRUNCATED)
-                return -1;
-
-        /* Accept CRLF line endings. */
-        for (i = 0; line[i]; i++) {
-                if (line[i] == '\r') {
-                        line[i] = '\0';
-                        break;
-                }
-        }
-        return result;
-}
-
 static int has_prefix(const char *string, const char *prefix) {
         while (*prefix) {
                 if (*string++ != *prefix++)

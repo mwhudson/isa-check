@@ -12,23 +12,10 @@ install() {
     if dracut_module_included squash-lib; then
         _root=$squashdir
     fi
-    if [[ -L $_root/init ]]; then
-        # Use the installed resolver to keep all links inside this image.
-        # Source it in a subshell so that its check() and install() do not
-        # replace this module's functions.
-        # shellcheck disable=SC1091
-        _real_init=$(
-            source /usr/lib/dracut/modules.d/95preinit/module-setup.sh
-            preinit_resolve_init "$_root"
-        ) || exit 1
-        rm "$_root/init"
-        ln -s /usr/lib/isa-preflight-test/observer "$_root/init"
-        dstdir="$_root" inst_simple "$ISA_TEST_OBSERVER" /usr/lib/isa-preflight-test/observer
-    else
-        mv "$_root/init" "$_root/init.test-real"
-        _real_init=/init.test-real
-        dstdir="$_root" inst_simple "$ISA_TEST_OBSERVER" /init
-    fi
+    # Moving a symlinked init keeps it valid, since both names are in the root.
+    mv "$_root/init" "$_root/init.test-real"
+    _real_init=/init.test-real
+    dstdir="$_root" inst_simple "$ISA_TEST_OBSERVER" /init
     mkdir -p "$_root/etc/isa-preflight-test"
     printf '%s\n' "$_real_init" > "$_root/etc/isa-preflight-test/real-init"
 

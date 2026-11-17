@@ -68,78 +68,20 @@ if check; then
 fi
 DRACUT_PREINIT=$checker
 
-# A systemd symlink is replaced by preflight, which executes its real target.
+# A systemd symlink is moved unchanged to /next-init and preflight becomes /init.
 setup_case
 make_systemd_init "$initdir"
 install
 [[ ! -L $initdir/init ]]
 cmp "$checker" "$initdir/init"
-[[ $(< "$initdir/etc/isa-preflight/next-init") == /usr/lib/systemd/systemd ]]
-[[ ! -e $initdir/init.dracut && ! -L $initdir/init.dracut ]]
+[[ -L $initdir/next-init && $(readlink "$initdir/next-init") == usr/lib/systemd/systemd ]]
 
-# Absolute initramfs links must not be resolved against the build host.
-setup_case
-make_systemd_init "$initdir"
-rm "$initdir/init"
-ln -s /usr/lib/systemd/systemd "$initdir/init"
-install
-cmp "$checker" "$initdir/init"
-[[ $(< "$initdir/etc/isa-preflight/next-init") == /usr/lib/systemd/systemd ]]
-
-# Follow nested absolute links inside the image, even when absent on the host.
-setup_case
-mkdir -p "$initdir/sbin" "$initdir/usr/lib/isa-preflight-test"
-printf '#!/bin/sh\nexit 0\n' > "$initdir/usr/lib/isa-preflight-test/init"
-chmod 0755 "$initdir/usr/lib/isa-preflight-test/init"
-ln -s sbin/init "$initdir/init"
-ln -s /usr/lib/isa-preflight-test/init "$initdir/sbin/init"
-install
-[[ $(< "$initdir/etc/isa-preflight/next-init") == /usr/lib/isa-preflight-test/init ]]
-
-# Resolve symlinked parent directories and relative targets before interpreting '..'.
-setup_case
-mkdir -p "$initdir/usr/lib/isa-preflight-test" "$initdir/usr/sbin"
-printf '#!/bin/sh\nexit 0\n' > "$initdir/usr/lib/isa-preflight-test/init"
-chmod 0755 "$initdir/usr/lib/isa-preflight-test/init"
-ln -s /usr/sbin "$initdir/sbin"
-ln -s ../lib/isa-preflight-test/init "$initdir/usr/sbin/init"
-ln -s /sbin/init "$initdir/init"
-install
-[[ $(< "$initdir/etc/isa-preflight/next-init") == /usr/lib/isa-preflight-test/init ]]
-
-# A host executable cannot make an image's broken absolute link valid.
-setup_case
-mkdir "$initdir/sbin"
-ln -s /bin/sh "$initdir/sbin/init"
-ln -s sbin/init "$initdir/init"
-if (install) 2> /dev/null; then
-    echo 'A host-only init target was accepted' >&2
-    exit 1
-fi
-
-# Reject loops and a trailing slash on an executable file.
-setup_case
-ln -s /init "$initdir/init"
-if (install) 2> /dev/null; then
-    echo 'An init symlink loop was accepted' >&2
-    exit 1
-fi
-setup_case
-make_systemd_init "$initdir"
-rm "$initdir/init"
-ln -s /usr/lib/systemd/systemd/ "$initdir/init"
-if (install) 2> /dev/null; then
-    echo 'A non-directory init target with a trailing slash was accepted' >&2
-    exit 1
-fi
-
-# A regular base init script is preserved under its recovery-friendly name.
+# A regular init script is moved unchanged to /next-init.
 setup_case
 make_base_init "$initdir"
 install
 cmp "$checker" "$initdir/init"
-[[ -f $initdir/init.dracut && -x $initdir/init.dracut ]]
-[[ $(< "$initdir/etc/isa-preflight/next-init") == /init.dracut ]]
+[[ $(< "$initdir/next-init") == $'#!/bin/sh\necho original init' ]]
 
 # A relative, non-canonical sysroot is valid; only an override must be absolute.
 setup_case
@@ -161,25 +103,22 @@ make_systemd_init "$initdir"
 make_base_init "$squashdir"
 squash_active=yes
 install
-[[ -L $initdir/init ]]
 [[ $(readlink "$initdir/init") == usr/lib/systemd/systemd ]]
-[[ ! -e $initdir/etc/isa-preflight/next-init ]]
+[[ ! -e $initdir/next-init && ! -L $initdir/next-init ]]
 cmp "$checker" "$squashdir/init"
-[[ -f $squashdir/init.dracut && -x $squashdir/init.dracut ]]
-[[ $(< "$squashdir/etc/isa-preflight/next-init") == /init.dracut ]]
+[[ -f $squashdir/next-init && -x $squashdir/next-init ]]
 
-# Never overwrite a pre-existing recovery init or follow a broken init link.
+# Never overwrite an existing /next-init, and require an init to wrap.
 setup_case
 make_base_init "$initdir"
-: > "$initdir/init.dracut"
+: > "$initdir/next-init"
 if (install) 2> /dev/null; then
-    echo 'An init.dracut collision was accepted' >&2
+    echo 'A /next-init collision was accepted' >&2
     exit 1
 fi
 
 setup_case
-ln -s usr/lib/systemd/missing "$initdir/init"
 if (install) 2> /dev/null; then
-    echo 'A broken init symlink was accepted' >&2
+    echo 'A missing /init was accepted' >&2
     exit 1
 fi

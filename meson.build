@@ -78,7 +78,7 @@ run_tests = find_program('tests/run.sh')
 
 base_test_root = meson.current_build_dir() / 'tests/base'
 base_test = executable('isa-preflight-base-test', 'src/noop.c',
-                       c_args: ['-DCONFIG_DIR="@0@"'.format(base_test_root / 'config'),
+                       c_args: ['-DNEXT_INIT_PATH="@0@"'.format(base_test_root / 'next-init'),
                                 '-DPREFLIGHT_TEST_EXIT_ON_HALT'])
 
 if variant == ''
@@ -108,7 +108,7 @@ if x86_64
     variant_test_root = meson.current_build_dir() / 'tests/variant'
     variant_test_defines = [
         '-DPREFLIGHT_TEST_EXIT_ON_HALT',
-        '-DCONFIG_DIR="@0@"'.format(variant_test_root / 'config'),
+        '-DNEXT_INIT_PATH="@0@"'.format(variant_test_root / 'next-init'),
         '-DCPUINFO_PATH="@0@"'.format(variant_test_root / 'cpuinfo'),
         '-DPROC_DIR="@0@"'.format(variant_test_root / 'proc'),
         '-DPREFLIGHT_VARIANT="' + test_variant + '"',

@@ -21,7 +21,6 @@ static const char variant_name[] = PREFLIGHT_VARIANT;
 static const char required_flags[] = PREFLIGHT_FLAGS;
 static char cpu_flags[CPU_FLAGS_SIZE];
 static char missing_features[MISSING_FEATURES_SIZE];
-static char next_init[NEXT_INIT_SIZE];
 
 static void write_string(const char *string) {
         unsigned long remaining = isa_string_length(string);
@@ -117,19 +116,13 @@ __attribute__((noreturn)) void preflight_main(void *initial_stack) {
                 halt();
         }
 
-        if (isa_read_first_line(NEXT_INIT_PATH, next_init, sizeof(next_init)) <= 0 || next_init[0] != '/')
-                fail("could not read an absolute next init path from " NEXT_INIT_PATH);
-
         /* Hand off the same environment as the no-op build. Failing to unmount
          * leaves an extra proc mount, which is not worth halting the boot for. */
         if (mounted_proc)
                 preflight_sys_umount(PROC_DIR);
 
-        preflight_sys_execve(next_init, argv, envp);
+        preflight_sys_execve(NEXT_INIT_PATH, argv, envp);
 
         /* execve only returns on failure. */
-        write_string("\nisa-preflight: the CPU check passed, but executing ");
-        write_string(next_init);
-        write_string(" failed.\nThe system will now halt.\n");
-        halt();
+        fail("the CPU check passed, but executing " NEXT_INIT_PATH " failed");
 }
