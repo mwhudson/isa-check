@@ -5,7 +5,6 @@
 /* Non-variant initramfs entry point: use libc to read the successor
  * path and chain-load it without inspecting CPU features. */
 #define _GNU_SOURCE
-#include <linux/reboot.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +20,7 @@ __attribute__((noreturn)) static void halt(void) {
         exit(1);
 #else
         if (getpid() == 1)
-                reboot(LINUX_REBOOT_CMD_HALT);
+                reboot(RB_HALT_SYSTEM);
         for (;;)
                 pause();
 #endif
