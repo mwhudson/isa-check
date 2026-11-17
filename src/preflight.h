@@ -12,12 +12,12 @@
 #define NEXT_INIT_PATH CONFIG_DIR "/next-init"
 #define NEXT_INIT_SIZE 4096
 
-/* Init operations supplied by the freestanding x86-64 backend. Each returns a
- * negative errno value on failure. */
 #ifndef PROC_DIR
 #define PROC_DIR "/proc"
 #endif
 
+/* Init operations supplied by the freestanding x86-64 backend. Each returns a
+ * negative errno value on failure. */
 long preflight_sys_write(int fd, const void *buffer, unsigned long count);
 long preflight_sys_mkdir(const char *path, unsigned int mode);
 long preflight_sys_mount_proc(const char *target);
