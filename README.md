@@ -47,8 +47,11 @@ On amd64, with proc already mounted:
 ./build/isa-check amd64v3  # Probe one variant
 ```
 
-Exit status is **0** for support, **1** for incompatibility, or **2** for an
-input/read error. `--table PATH` overrides the runtime variant table.
+Exit status is **0** for support and **1** for incompatibility. Status **2**
+means a usage error, a failure to read the variant table, `/proc/cpuinfo` or the
+native architecture from dpkg, a failure to write output, or a requested variant
+that the table does not list for the native architecture. `--table PATH`
+overrides the runtime variant table.
 The native architecture is obtained from `dpkg --print-architecture`. CPU
 features are read from Linux's `flags` (x86) or `Features` (ARM) fields. New
 variant-table rows using those feature names need no CLI rebuild. Architectures
