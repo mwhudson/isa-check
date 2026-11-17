@@ -11,6 +11,14 @@ variant = get_option('variant')
 varianttable = get_option('varianttable')
 x86_64 = host_machine.cpu_family() == 'x86_64'
 awk = find_program('awk')
+# The dracut module refers to the checker by this fixed, non-multiarch path.
+pkglibexecdir = get_option('prefix') / 'lib/isa-preflight'
+dracut = dependency('dracut', method: 'pkg-config', required: false)
+if dracut.found()
+    dracutmodulesdir = dracut.get_variable(pkgconfig: 'dracutmodulesdir')
+else
+    dracutmodulesdir = get_option('prefix') / 'lib/dracut/modules.d'
+endif
 
 required_flags = ''
 if variant != ''
@@ -45,7 +53,7 @@ check_sources = ['src/check.c', 'src/cpuinfo.c', 'src/libc.c']
 if variant == ''
     preflight = executable('isa-preflight', 'src/noop.c',
                            install: true,
-                           install_dir: 'lib/isa-preflight')
+                           install_dir: pkglibexecdir)
 else
     variant_defines = [
         '-DPREFLIGHT_VARIANT="' + variant + '"',
@@ -56,13 +64,13 @@ else
                            c_args: variant_c_args + variant_defines,
                            link_args: variant_link_args,
                            install: true,
-                           install_dir: 'lib/isa-preflight')
+                           install_dir: pkglibexecdir)
 endif
 
 install_man('man/isa-preflight.8')
 install_data('dracut/99preinit/module-setup.sh',
              install_mode: 'rwxr-xr-x',
-             install_dir: 'lib/dracut/modules.d/99preinit')
+             install_dir: dracutmodulesdir / '99preinit')
 
 check_static = find_program('tests/check-static.sh')
 check_dynamic = find_program('tests/check-dynamic.sh')
@@ -119,7 +127,7 @@ if x86_64
 endif
 
 executable('isa-check', check_sources,
-           install: true, install_dir: 'bin')
+           install: true)
 install_man('man/isa-check.8')
 
 check_test_root = meson.current_build_dir() / 'tests/check'
